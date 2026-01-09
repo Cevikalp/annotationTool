@@ -80,27 +80,44 @@ We use **PyInstaller** to bundle the application. Select the command for your op
 On Unix-based systems, use a **colon (`:`)** to separate source and destination paths.
 
 ```bash
-pyinstaller --noconsole --onefile \
+pyinstaller --noconsole --onedir \
+    --contents-directory "libs" \
     --add-data "id_list.txt:." \
     --add-data "yolo_config.json:." \
     --add-data "models/yolo11n.pt:models" \
     --hidden-import="ultralytics" \
-    --name="AnnotationTool_Linux" \
+    --name="AnnotationTool_v1" \
     annotation.py
 ```
 
-### Option B: Windows
+### Option B: Windows (command prompt)
 On Windows, use a **semicolon (`;`)** to separate source and destination paths.
 
 ```bash
-pyinstaller --noconsole --onefile ^
+pyinstaller --noconsole --onedir ^
+    --contents-directory "libs" ^
     --add-data "id_list.txt;." ^
     --add-data "yolo_config.json;." ^
     --add-data "models/yolo11n.pt;models" ^
     --hidden-import="ultralytics" ^
-    --name="AnnotationTool_Win" ^
+    --name="AnnotationTool_v1" ^
     annotation.py
 ```
+
+### Option C: Windows (Powershell)
+On Windows, use a **semicolon (`;`)** to separate source and destination paths.
+
+```bash
+pyinstaller --noconsole --onedir `
+    --contents-directory "libs" `
+    --add-data "id_list.txt;." `
+    --add-data "yolo_config.json;." `
+    --add-data "models/yolo11n.pt;models" `
+    --hidden-import="ultralytics" `
+    --name="AnnotationTool_v1" `
+    annotation.py
+```
+
 
 *(Note: If running in Command Prompt instead of PowerShell, remove the `^` line breaks and run as a single line).*
 
