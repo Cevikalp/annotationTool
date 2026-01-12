@@ -305,6 +305,65 @@ class AnnotationManager:
                 count += 1
                 
         return count
+    def update_track_id_globally(self, old_tid, new_tid, json_folder):
+        """
+        Renames a Track ID in ALL JSON files in the folder.
+        """
+        if old_tid == new_tid: return 0
+        
+        count = 0
+        # Scan all files
+        for filename in os.listdir(json_folder):
+            if not filename.endswith(".json") or filename.startswith("classes"): 
+                continue
+            
+            path = os.path.join(json_folder, filename)
+            changed = False
+            try:
+                with open(path, 'r') as f:
+                    data = json.load(f)
+                
+                # Check and Modify
+                for key, val in data.items():
+                    if val.get('track_id') == old_tid:
+                        val['track_id'] = new_tid
+                        changed = True
+                        count += 1
+                
+                # Save back if changed
+                if changed:
+                    with open(path, 'w') as f:
+                        json.dump(data, f, indent=4)
+            except: pass
+            
+        return count
+
+    def update_class_globally(self, track_id, new_class, json_folder):
+        """
+        Changes the Class ID for a specific Track ID in ALL JSON files.
+        """
+        count = 0
+        for filename in os.listdir(json_folder):
+            if not filename.endswith(".json") or filename.startswith("classes"): 
+                continue
+            
+            path = os.path.join(json_folder, filename)
+            changed = False
+            try:
+                with open(path, 'r') as f:
+                    data = json.load(f)
+                
+                for key, val in data.items():
+                    if val.get('track_id') == track_id:
+                        val['class'] = new_class
+                        changed = True
+                        count += 1
+                
+                if changed:
+                    with open(path, 'w') as f:
+                        json.dump(data, f, indent=4)
+            except: pass
+        return count
 
 # =============================================================================
 # 3. VISUAL ITEMS
@@ -346,6 +405,40 @@ class BoxItem(qtw.QGraphicsRectItem):
         
         self.resizing = False
         self.resize_handle = None
+
+    def update_appearance(self, class_id, track_id):
+        # 1. Update Internal IDs
+        self.class_id = class_id
+        self.track_id = track_id
+        
+        # 2. Update Color (Safe)
+        # This uses your existing set_color method
+        if hasattr(self, 'set_color'):
+            self.set_color(track_id)
+        
+        # 3. Get Class Name (SAFE Check)
+        cls_name = str(class_id)
+        
+        # Check if 'manager' exists before trying to use it
+        if hasattr(self, 'manager') and self.manager:
+            try:
+                # Try to get the real name from the manager map
+                if hasattr(self.manager, 'id_to_name_map'):
+                    cls_name = self.manager.id_to_name_map.get(class_id, str(class_id))
+            except: pass
+
+        # 4. Update Text (Safe)
+        if hasattr(self, 'text'):
+            self.text.setPlainText(f"{track_id} : {cls_name}")
+            
+            # Optional: Add background color to text for readability
+            # We need to find the color again safely
+            try:
+                # Assuming get_color_for_id is global or we can grab pen color
+                color = self.pen().color() 
+                self.text.setHtml(f'<div style="background-color: {color.name()}; color: white; padding: 2px;">{track_id} : {cls_name}</div>')
+            except:
+                pass
 
     def set_color(self, track_id):
         color = get_color_for_id(track_id)
@@ -572,7 +665,7 @@ class YoloWorker(qtc.QThread):
 
         self.results_ready.emit(detected_objects)
 
-        
+
 # =============================================================================
 # 4. MAIN WINDOW
 # =============================================================================
@@ -601,6 +694,18 @@ class MainWindow(qtw.QMainWindow):
         qtg.QShortcut(qtg.QKeySequence("D"), self, self.next_frame)
         qtg.QShortcut(qtg.QKeySequence("A"), self, self.prev_frame)
 
+
+    def set_view_mode(self):
+        """
+        Resets the application state to standard View/Select mode.
+        """
+        # 1. Reset your existing flags
+        self.is_drawing_mode = False
+        self.pending_draw_data = None 
+
+        self.view.setCursor(qtg.Qt.ArrowCursor)
+        self.lbl_status.setText("Mode: View")
+        self.lbl_status.setStyleSheet("color: grey;")
 
     def calculate_iou(self, boxA, boxB):
         # box: [x1, y1, x2, y2]
@@ -820,6 +925,161 @@ class MainWindow(qtw.QMainWindow):
         self.load_frame() # Refresh current view
         qtw.QMessageBox.information(self, "Complete", f"Processed {tracks_processed} tracks.\nAdded {total_added} new boxes total.")
 
+    def show_frame_list_menu(self, pos):
+        """ Context menu for the top list (Current Frame Objects) """
+        item = self.list_frame_objects.itemAt(pos)
+        if not item: return
+
+        # Get Box ID from user role
+        box_id = item.data(qtc.Qt.UserRole)
+        box_data = self.manager.boxes.get(box_id)
+        if not box_data: return
+
+        menu = qtw.QMenu(self)
+        
+        # Actions
+        action_edit_class = menu.addAction("Edit Class (This Frame Only)")
+        action_edit_track = menu.addAction("Edit Track ID (This Frame Only)")
+
+        action = menu.exec(self.list_frame_objects.mapToGlobal(pos))
+
+        if action == action_edit_class:
+            self.edit_class_single(box_id, box_data)
+        elif action == action_edit_track:
+            self.edit_track_single(box_id, box_data)
+
+    def show_global_list_menu(self, pos):
+        """ Context menu for the bottom list (All Tracks Summary) """
+        item = self.list_folder_objects.itemAt(pos)
+        if not item: return
+
+        # The bottom list stores Track ID in UserRole
+        track_id = item.data(qtc.Qt.UserRole)
+
+        menu = qtw.QMenu(self)
+        action_edit_class_all = menu.addAction("Edit Class (ALL Frames)")
+        action_edit_track_all = menu.addAction("Edit Track ID (ALL Frames)")
+        
+        action = menu.exec(self.list_folder_objects.mapToGlobal(pos))
+        
+        if action == action_edit_class_all:
+            self.edit_class_global(track_id)
+        elif action == action_edit_track_all:
+            self.edit_track_global(track_id)
+
+
+    # --- Single Frame Edits ---
+    def edit_class_single(self, box_id, box_data):
+        current_cls = box_data['class']
+        
+        # Prepare List
+        items = []
+        sorted_ids = sorted(self.id_to_name_map.keys())
+        current_index = 0
+        for i, cid in enumerate(sorted_ids):
+            name = self.id_to_name_map[cid]
+            items.append(f"{cid}: {name}")
+            if cid == current_cls:
+                current_index = i
+        
+        val_str, ok = qtw.QInputDialog.getItem(self, "Edit Class", "Select New Class:", items, current_index, False)
+        
+        if ok and val_str:
+            new_class_id = int(val_str.split(':')[0])
+            if new_class_id != current_cls:
+                # 1. Update Memory
+                self.manager.boxes[box_id]['class'] = new_class_id
+                
+                # 2. Update Scene
+                for item in self.scene.items():
+                    if isinstance(item, BoxItem) and item.box_id == box_id:
+                        item.update_appearance(new_class_id, box_data['track_id'])
+                        break
+                
+                # 3. FIX: Update Global Cache so bottom list updates
+                self.manager.folder_unique_tracks[box_data['track_id']] = new_class_id
+                
+                self.save_data()
+                self.refresh_lists()
+    
+
+    def edit_track_single(self, box_id, box_data):
+        current_tid = box_data['track_id']
+        val, ok = qtw.QInputDialog.getInt(self, "Edit Track ID", "New Track ID:", current_tid, 1, 10000)
+        
+        if ok and val != current_tid:
+            # 1. Update Memory
+            self.manager.boxes[box_id]['track_id'] = val
+            
+            # 2. Update Scene
+            for item in self.scene.items():
+                if isinstance(item, BoxItem) and item.box_id == box_id:
+                    item.update_appearance(box_data['class'], val)
+                    break
+            
+            # 3. FIX: Add new Track ID to Global Cache
+            self.manager.folder_unique_tracks[val] = box_data['class']
+            # (Optional: We don't delete the old ID from cache because it might exist in other frames)
+
+            self.save_data()
+            self.refresh_lists()
+
+
+    # --- Global Edits (The Heavy Lifters) ---
+    def edit_class_global(self, track_id):
+        # Prepare List
+        items = []
+        sorted_ids = sorted(self.id_to_name_map.keys())
+        for cid in sorted_ids:
+            name = self.id_to_name_map[cid]
+            items.append(f"{cid}: {name}")
+            
+        val_str, ok = qtw.QInputDialog.getItem(self, "Global Class Update", 
+                                               f"Change Class for Track {track_id} in ALL frames to:", 
+                                               items, 0, False)
+        
+        if ok and val_str:
+            new_class_id = int(val_str.split(':')[0])
+            
+            # 1. Update Files
+            count = self.manager.update_class_globally(track_id, new_class_id, self.json_folder)
+            
+            # 2. FIX: Update Global Cache
+            self.manager.folder_unique_tracks[track_id] = new_class_id
+            
+            # 3. Reload
+            self.load_frame() # This calls refresh_lists()
+            qtw.QMessageBox.information(self, "Updated", f"Updated class for {count} boxes across the video.")
+        self.set_view_mode()
+
+
+    def edit_track_global(self, old_track_id):
+        val, ok = qtw.QInputDialog.getInt(self, "Global Track Update", 
+                                          f"Rename Track {old_track_id} in ALL frames to:", 
+                                          old_track_id, 1, 10000)
+        if not ok or val == old_track_id: return
+
+        if self.manager.check_track_used_globally(val, self.json_folder):
+            reply = qtw.QMessageBox.question(self, "Conflict Warning", 
+                                             f"Track ID {val} already exists.\nMerge?", 
+                                             qtw.QMessageBox.Yes | qtw.QMessageBox.No)
+            if reply == qtw.QMessageBox.No: return
+
+        # 1. Update Files
+        count = self.manager.update_track_id_globally(old_track_id, val, self.json_folder)
+        
+        # 2. FIX: Update Global Cache (Swap Keys)
+        if old_track_id in self.manager.folder_unique_tracks:
+            cls = self.manager.folder_unique_tracks[old_track_id]
+            del self.manager.folder_unique_tracks[old_track_id] # Remove old
+            self.manager.folder_unique_tracks[val] = cls        # Add new
+
+
+        # 3. Reload
+        self.load_frame()
+        qtw.QMessageBox.information(self, "Updated", f"Renamed Track {old_track_id} to {val} in {count} boxes.")
+        self.set_view_mode()
+
     
     def setup_ui(self):
         main_widget = qtw.QWidget()
@@ -874,6 +1134,9 @@ class MainWindow(qtw.QMainWindow):
         sidebar_layout.addWidget(qtw.QLabel("<b>Objects in Frame</b>"))
         self.list_frame_objects = qtw.QListWidget()
         self.list_frame_objects.itemClicked.connect(self.on_frame_list_item_clicked)
+        self.list_frame_objects.setContextMenuPolicy(qtc.Qt.CustomContextMenu)  # <--- ENABLE RIGHT CLICK
+        self.list_frame_objects.customContextMenuRequested.connect(self.show_frame_list_menu) # <--- CONNECT
+        self.list_frame_objects.itemClicked.connect(self.on_frame_list_item_clicked)
         # Limit height so Folder list is visible
         self.list_frame_objects.setMaximumHeight(200) 
         sidebar_layout.addWidget(self.list_frame_objects)
@@ -889,6 +1152,8 @@ class MainWindow(qtw.QMainWindow):
         self.list_folder_objects = qtw.QListWidget()
         self.list_folder_objects.setToolTip("Click an object here to draw it on the current frame.")
         self.list_folder_objects.itemClicked.connect(self.on_folder_list_item_clicked)
+        self.list_folder_objects.setContextMenuPolicy(qtc.Qt.CustomContextMenu) # <--- ENABLE RIGHT CLICK
+        self.list_folder_objects.customContextMenuRequested.connect(self.show_global_list_menu) # <--- CONNECT
         sidebar_layout.addWidget(self.list_folder_objects)
 
         interp_layout = qtw.QHBoxLayout()
@@ -970,6 +1235,7 @@ class MainWindow(qtw.QMainWindow):
 
         # 5. Reload current frame to see changes immediately
         self.load_frame()
+        self.set_view_mode()
 
 
     def start_creation_flow(self):

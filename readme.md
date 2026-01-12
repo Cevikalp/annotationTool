@@ -39,9 +39,10 @@ To compile this tool into a standalone file for distribution, please refer to [B
 
 ### 2. Manual Annotation
 * **Draw a Box:** Left-click and drag on the image area.
-* **Select Class:** A dialog will pop up asking for the **Class ID** (e.g., 1 for Person, 3 for Car). Refer to `id_list.txt` for codes.
-* **Track IDs:** The tool automatically assigns a **Track ID**.
+* **Select Class:** A dropdown dialog will appear. Select the correct class (e.g., "1: Person", "3: Car") from the list.
+* **Track IDs:** The tool automatically assigns a **Track ID** based on the highest existing ID + 1.
     * *Important:* If you are annotating the **same object** across multiple frames, ensure the **Track ID stays the same**.
+* **Draw Existing Track:** To draw a specific object that already exists (e.g., "Track 5" which you saw 10 frames ago), click it in the **"All Detected Objects"** list on the right. Your next click-drag will be assigned that specific ID automatically.
 
 ### 3. AI Auto-Detection (YOLO)
 The **"Auto-Detect (YOLO)"** button uses a neural network to find objects for you.
@@ -56,7 +57,7 @@ Instead of drawing the same car 100 times, use Interpolation:
 
 1.  **Frame 10:** Draw the car (Track ID 5).
 2.  **Frame 50:** Go to frame 50, draw the car again (Track ID 5).
-3.  **Action:** Click **"Interpolate Selected"** (or "Interpolate ALL").
+3.  **Action:** Click **"Interpolate Selected"** to fill gaps for just that car, or **"Interpolate ALL"** to process every object in the folder at once.
 4.  **Result:** The tool automatically fills frames 11-49 with bounding boxes connecting the two positions.
 
 **Rules for Interpolation:**
@@ -64,7 +65,15 @@ Instead of drawing the same car 100 times, use Interpolation:
 * The **Track ID must match** (e.g., ID 5 on start frame, ID 5 on end frame).
 * **Static Objects:** For background objects (parked cars), just annotate the first and last frame of the video and interpolate.
 
-### 5. Editing & Deletion
+### 5. Advanced Editing (Right-Click Menu)
+You can right-click any item in the sidebars to access powerful editing tools:
+
+* **Edit Class (This Frame):** Fixes a mistake on the current frame only (e.g., changing "Car" to "Truck").
+* **Edit Track ID (This Frame):** Fixes a track swap error (e.g., changing ID 5 to ID 6 for just this frame).
+* **Global Class Update:** Changes the class for a specific Track ID across **ALL** frames in the video. Useful if you realized "Track 10" is actually a "Van" and not a "Car" after annotating 50 frames.
+* **Global Track Rename:** Renames a Track ID across **ALL** frames. Useful for merging tracks or organizing IDs.
+
+### 6. Deletion & Cleanup
 * **Select:** Click on a box to select it (turns yellow).
 * **Delete:** Press `Delete` key or click "Delete Selected".
 * **Global Cleanup:** If you delete the *last remaining instance* of a Track ID, the tool automatically removes it from the "All Detected Objects" list to keep your workspace clean.
@@ -81,6 +90,7 @@ Instead of drawing the same car 100 times, use Interpolation:
 | **Rewind** | `S` (Jump 10 frames) |
 | **Delete Box** | `Delete` Key |
 | **Select Box** | Left Click on Box |
+| **Advanced Edit** | Right Click on List Item |
 | **Auto-Detect** | Click "Auto-Detect (YOLO)" |
 | **Interpolate** | Click "Interpolate Selected" |
 
