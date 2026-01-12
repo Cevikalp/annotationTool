@@ -86,6 +86,7 @@ pyinstaller --noconsole --onedir \
     --add-data "yolo_config.json:." \
     --add-data "models/yolo11n.pt:models" \
     --hidden-import="ultralytics" \
+    --distpath "Final_Build" \
     --name="AnnotationTool_v1" \
     annotation.py
 ```
@@ -100,6 +101,7 @@ pyinstaller --noconsole --onedir ^
     --add-data "yolo_config.json;." ^
     --add-data "models/yolo11n.pt;models" ^
     --hidden-import="ultralytics" ^
+    --distpath "Final_Build" ^
     --name="AnnotationTool_v1" ^
     annotation.py
 ```
@@ -114,6 +116,7 @@ pyinstaller --noconsole --onedir `
     --add-data "yolo_config.json;." `
     --add-data "models/yolo11n.pt;models" `
     --hidden-import="ultralytics" `
+    --distpath "Final_Build" `
     --name="AnnotationTool_v1" `
     annotation.py
 ```
