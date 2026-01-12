@@ -98,6 +98,34 @@ class AnnotationManager:
         # Store all unique tracks found in the folder: {track_id: class_id}
         self.folder_unique_tracks = {} 
 
+
+    def rebuild_track_cache(self, json_folder):
+        """
+        Clears and rebuilds the folder_unique_tracks map by scanning all JSON files.
+        This ensures that if a Track ID is removed from the last frame it existed in,
+        it disappears from the sidebar immediately.
+        """
+        self.folder_unique_tracks = {}
+        
+        if not os.path.exists(json_folder): return
+
+        for filename in os.listdir(json_folder):
+            if not filename.endswith(".json") or filename.startswith("classes"): 
+                continue
+            
+            path = os.path.join(json_folder, filename)
+            try:
+                with open(path, 'r') as f:
+                    data = json.load(f)
+                
+                for val in data.values():
+                    tid = val.get('track_id')
+                    cls = val.get('class')
+                    # We just need to know it exists. 
+                    # If multiple frames have different classes for ID X (rare error), last one wins.
+                    self.folder_unique_tracks[tid] = cls
+            except: pass
+
     def scan_folder(self, json_folder):
         """Scans all JSON files to build a list of all existing objects."""
         self.folder_unique_tracks = {}
@@ -363,6 +391,44 @@ class AnnotationManager:
                     with open(path, 'w') as f:
                         json.dump(data, f, indent=4)
             except: pass
+        return count
+
+    def swap_track_id_globally(self, id1, id2, json_folder):
+        """
+        Swaps two Track IDs across ALL files.
+        Track A becomes Track B, and Track B becomes Track A.
+        """
+        if id1 == id2: return 0
+        
+        count = 0
+        for filename in os.listdir(json_folder):
+            if not filename.endswith(".json") or filename.startswith("classes"): 
+                continue
+            
+            path = os.path.join(json_folder, filename)
+            changed = False
+            try:
+                with open(path, 'r') as f:
+                    data = json.load(f)
+                
+                for key, val in data.items():
+                    current_id = val.get('track_id')
+                    
+                    # The Swap Logic
+                    if current_id == id1:
+                        val['track_id'] = id2
+                        changed = True
+                        count += 1
+                    elif current_id == id2:
+                        val['track_id'] = id1
+                        changed = True
+                        count += 1
+                
+                if changed:
+                    with open(path, 'w') as f:
+                        json.dump(data, f, indent=4)
+            except: pass
+            
         return count
 
 # =============================================================================
@@ -940,6 +1006,7 @@ class MainWindow(qtw.QMainWindow):
         # Actions
         action_edit_class = menu.addAction("Edit Class (This Frame Only)")
         action_edit_track = menu.addAction("Edit Track ID (This Frame Only)")
+        # action_swap_track = menu.addAction("Swap Track ID (This Frame)") # <--- NEW
 
         action = menu.exec(self.list_frame_objects.mapToGlobal(pos))
 
@@ -947,6 +1014,8 @@ class MainWindow(qtw.QMainWindow):
             self.edit_class_single(box_id, box_data)
         elif action == action_edit_track:
             self.edit_track_single(box_id, box_data)
+        # elif action == action_swap_track:
+        #     self.swap_track_single(box_id, box_data)  # <--- NEW
 
     def show_global_list_menu(self, pos):
         """ Context menu for the bottom list (All Tracks Summary) """
@@ -959,6 +1028,7 @@ class MainWindow(qtw.QMainWindow):
         menu = qtw.QMenu(self)
         action_edit_class_all = menu.addAction("Edit Class (ALL Frames)")
         action_edit_track_all = menu.addAction("Edit Track ID (ALL Frames)")
+        action_swap_track_all = menu.addAction("Swap Track ID (Global)") # <--- NEW
         
         action = menu.exec(self.list_folder_objects.mapToGlobal(pos))
         
@@ -966,7 +1036,8 @@ class MainWindow(qtw.QMainWindow):
             self.edit_class_global(track_id)
         elif action == action_edit_track_all:
             self.edit_track_global(track_id)
-
+        elif action == action_swap_track_all:
+            self.swap_track_global(track_id) # <--- NEW
 
     # --- Single Frame Edits ---
     def edit_class_single(self, box_id, box_data):
@@ -1021,8 +1092,9 @@ class MainWindow(qtw.QMainWindow):
             self.manager.folder_unique_tracks[val] = box_data['class']
             # (Optional: We don't delete the old ID from cache because it might exist in other frames)
 
-            self.save_data()
-            self.refresh_lists()
+        self.save_data()
+        self.manager.rebuild_track_cache(self.json_folder)
+        self.refresh_lists()
 
 
     # --- Global Edits (The Heavy Lifters) ---
@@ -1075,9 +1147,106 @@ class MainWindow(qtw.QMainWindow):
             self.manager.folder_unique_tracks[val] = cls        # Add new
 
 
-        # 3. Reload
+
+    # def swap_track_single(self, source_box_id, source_data_passed):
+    #     # 1. Safety: Re-fetch the latest source data from manager
+    #     if source_box_id not in self.manager.boxes: return
+    #     source_data = self.manager.boxes[source_box_id]
+        
+    #     current_id = int(source_data['track_id'])
+        
+    #     # 2. Ask for Target ID
+    #     target_id, ok = qtw.QInputDialog.getInt(self, "Swap Track ID (Frame)", 
+    #                                             f"Swap Track {current_id} with:", 
+    #                                             current_id + 1, 1, 10000)
+    #     if not ok or target_id == current_id: return
+
+    #     # 3. ROBUST FIND: Find the object that owns "Target ID"
+    #     target_box_id = None
+    #     for bids, bdata in self.manager.boxes.items():
+    #         # Skip the source box itself
+    #         if bids == source_box_id: continue
+            
+    #         # Force Integer Comparison (Fixes the "Not Found" bug)
+    #         try:
+    #             if int(bdata.get('track_id')) == int(target_id):
+    #                 target_box_id = bids
+    #                 break
+    #         except: continue
+        
+    #     # 4. Perform the Swap
+    #     if target_box_id:
+    #         # --- CASE A: Both exist. SWAP. ---
+    #         target_data = self.manager.boxes[target_box_id]
+    #         target_cls = target_data['class']
+    #         source_cls = source_data['class']
+            
+    #         # Update Data Memory
+    #         self.manager.boxes[source_box_id]['track_id'] = int(target_id)
+    #         self.manager.boxes[target_box_id]['track_id'] = int(current_id)
+            
+    #         # Update Visuals
+    #         for item in self.scene.items():
+    #             if isinstance(item, BoxItem):
+    #                 if item.box_id == source_box_id:
+    #                     item.update_appearance(source_cls, int(target_id))
+    #                 elif item.box_id == target_box_id:
+    #                     item.update_appearance(target_cls, int(current_id))
+            
+    #         qtw.QMessageBox.information(self, "Swapped", f"Swapped Track {current_id} <-> {target_id} in this frame.")
+        
+    #     else:
+    #         # --- CASE B: Target not in frame. RENAME. ---
+    #         # This is valid if the user wants to take ID 5 and make it ID 99 (and ID 99 isn't used yet)
+    #         self.manager.boxes[source_box_id]['track_id'] = int(target_id)
+            
+    #         for item in self.scene.items():
+    #             if isinstance(item, BoxItem) and item.box_id == source_box_id:
+    #                 item.update_appearance(source_data['class'], int(target_id))
+            
+    #         qtw.QMessageBox.information(self, "Renamed", f"Track {target_id} was not found in this frame.\nRenamed {current_id} to {target_id} instead.")
+
+    #     # 5. Save & Reset
+    #     self.save_data()
+    #     self.manager.rebuild_track_cache(self.json_folder)
+    #     self.refresh_lists()
+    #     self.set_view_mode()
+
+    def swap_track_global(self, id1):
+        # 1. Ask for Target ID
+        id2, ok = qtw.QInputDialog.getInt(self, "Swap Track ID (Global)", 
+                                          f"Swap Track {id1} globally with:", 
+                                          id1 + 1, 1, 10000)
+        # Check if cancelled or same ID
+        if not ok or id1 == id2: return
+
+        # 2. Update Files
+        count = self.manager.swap_track_id_globally(id1, id2, self.json_folder)
+        
+        # 3. Update Global Cache (Swap Keys)
+        cls1 = self.manager.folder_unique_tracks.get(id1)
+        cls2 = self.manager.folder_unique_tracks.get(id2)
+        
+        # Move Class from ID1 to ID2
+        if cls1 is not None:
+            self.manager.folder_unique_tracks[id2] = cls1
+        else:
+            if id2 in self.manager.folder_unique_tracks:
+                del self.manager.folder_unique_tracks[id2]
+
+        # Move Class from ID2 to ID1
+        if cls2 is not None:
+            self.manager.folder_unique_tracks[id1] = cls2
+        else:
+             if id1 in self.manager.folder_unique_tracks:
+                del self.manager.folder_unique_tracks[id1]
+
+        # 4. Reload
         self.load_frame()
-        qtw.QMessageBox.information(self, "Updated", f"Renamed Track {old_track_id} to {val} in {count} boxes.")
+        
+        # FIX: Use 'id1' and 'id2' here (not old_track_id or val)
+        qtw.QMessageBox.information(self, "Swapped", f"Swapped IDs {id1} and {id2} in {count} instances.")
+        
         self.set_view_mode()
 
     
