@@ -71,7 +71,7 @@ class CreateObjectDialog(qtw.QDialog):
         
         layout.addWidget(qtw.QLabel("Track ID:"))
         self.spin_track = qtw.QSpinBox()
-        self.spin_track.setRange(1, 99999)
+        self.spin_track.setRange(-1, 10000)
         self.spin_track.setValue(next_track_id)
         layout.addWidget(self.spin_track)
         
@@ -510,7 +510,7 @@ class BoxItem(qtw.QGraphicsRectItem):
         color = get_color_for_id(track_id)
         
         # CHANGED: Pen width increased from 2 to 4
-        self.setPen(qtg.QPen(color, 4))
+        self.setPen(qtg.QPen(color, 7))
         
         self.setBrush(qtg.QBrush(qtg.Qt.transparent))
 
@@ -606,6 +606,10 @@ class BoxItem(qtw.QGraphicsRectItem):
         self.resizing = False
         self.setFlag(qtw.QGraphicsItem.ItemIsMovable, True)
         
+        final_scene_rect = self.sceneBoundingRect()
+        self.setPos(0, 0)
+        self.setRect(final_scene_rect)
+
         # Save changes
         self.manager.update_box(self.box_id, rect=self.rect())
         self.main_window.save_data()
@@ -1076,7 +1080,7 @@ class MainWindow(qtw.QMainWindow):
 
     def edit_track_single(self, box_id, box_data):
         current_tid = box_data['track_id']
-        val, ok = qtw.QInputDialog.getInt(self, "Edit Track ID", "New Track ID:", current_tid, 1, 10000)
+        val, ok = qtw.QInputDialog.getInt(self, "Edit Track ID", "New Track ID:", current_tid, -1, 10000)
         
         if ok and val != current_tid:
             # 1. Update Memory
@@ -1128,7 +1132,7 @@ class MainWindow(qtw.QMainWindow):
     def edit_track_global(self, old_track_id):
         val, ok = qtw.QInputDialog.getInt(self, "Global Track Update", 
                                           f"Rename Track {old_track_id} in ALL frames to:", 
-                                          old_track_id, 1, 10000)
+                                          old_track_id, -1, 10000)
         if not ok or val == old_track_id: return
 
         if self.manager.check_track_used_globally(val, self.json_folder):
@@ -1216,7 +1220,7 @@ class MainWindow(qtw.QMainWindow):
         # 1. Ask for Target ID
         id2, ok = qtw.QInputDialog.getInt(self, "Swap Track ID (Global)", 
                                           f"Swap Track {id1} globally with:", 
-                                          id1 + 1, 1, 10000)
+                                          id1 + 1, -1, 10000)
         # Check if cancelled or same ID
         if not ok or id1 == id2: return
 
