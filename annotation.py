@@ -742,7 +742,9 @@ class YoloWorker(qtc.QThread):
 class MainWindow(qtw.QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Annotation Tool - Final Workflow")
+        self.setWindowTitle("NeuroTag - AI Annotation Tool")
+        if os.path.exists("NeuroTag.ico"):
+            self.setWindowIcon(qtg.QIcon("NeuroTag.ico"))
         self.resize(1300, 800)
         
         self.manager = AnnotationManager()

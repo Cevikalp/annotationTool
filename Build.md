@@ -47,7 +47,8 @@ pip install PySide6 ultralytics pyinstaller
 Before building, you must ensure the AI model and configuration files are present in the project folder.
 
 1.  **Configuration Files:** Ensure `id_list.txt` and `yolo_config.json` are in the root directory.
-2.  **Model Folder:** Create a `models` directory if it doesn't exist.
+2.  **App Icon:** Place an .ico file named NeuroTag.ico in the root directory.
+3.  **Model Folder:** Create a `models` directory if it doesn't exist.
     ```bash
     mkdir models
     ```
@@ -67,6 +68,7 @@ annotationTool/
 ├── annotation.py
 ├── id_list.txt
 ├── yolo_config.json
+├── NeuroTag.ico
 └── ...
 ```
 
@@ -74,7 +76,9 @@ annotationTool/
 
 ## 4. Build the Executable
 
-We use **PyInstaller** to bundle the application. Select the command for your operating system.
+We use **PyInstaller** to bundle the application. We use the --onedir mode to create a folder containing the executable and its libraries (more stable than a single file).
+
+**Select the command for your operating system:**
 
 ### Option A: Linux & macOS
 On Unix-based systems, use a **colon (`:`)** to separate source and destination paths.
@@ -85,9 +89,11 @@ pyinstaller --noconsole --onedir \
     --add-data "id_list.txt:." \
     --add-data "yolo_config.json:." \
     --add-data "models/yolo11n.pt:models" \
+    --add-data "NeuroTag.ico:." \
     --hidden-import="ultralytics" \
+    --icon "NeuroTag.ico" \
     --distpath "Final_Build" \
-    --name="AnnotationTool_v1" \
+    --name="NeuroTag" \
     annotation.py
 ```
 
@@ -100,9 +106,11 @@ pyinstaller --noconsole --onedir ^
     --add-data "id_list.txt;." ^
     --add-data "yolo_config.json;." ^
     --add-data "models/yolo11n.pt;models" ^
+    --add-data "NeuroTag.ico;." ^
     --hidden-import="ultralytics" ^
+    --icon "NeuroTag.ico" ^
     --distpath "Final_Build" ^
-    --name="AnnotationTool_v1" ^
+    --name="NeuroTag" ^
     annotation.py
 ```
 
@@ -115,9 +123,11 @@ pyinstaller --noconsole --onedir `
     --add-data "id_list.txt;." `
     --add-data "yolo_config.json;." `
     --add-data "models/yolo11n.pt;models" `
+    --add-data "NeuroTag.ico;." `
     --hidden-import="ultralytics" `
+    --icon "NeuroTag.ico" `
     --distpath "Final_Build" `
-    --name="AnnotationTool_v1" `
+    --name="NeuroTag" `
     annotation.py
 ```
 
@@ -128,12 +138,20 @@ pyinstaller --noconsole --onedir `
 
 ## 5. Locate & Run
 
-Once the build finishes, your standalone executable will be located in the **`dist/`** folder.
+Once the build finishes, your standalone application will be located in the Final_Build/ folder.
+For Distribution (Important)
 
-* **Linux/Mac:** `dist/AnnotationTool_Linux`
-* **Windows:** `dist/AnnotationTool_Win.exe`
+Since we used --onedir, the output is a Folder, not a single file.
 
-You can now move this single file to any other machine. It does **not** require Python or PyTorch to be installed on the target machine.
+1.    Navigate to Final_Build/.
+
+2.   Find the folder named NeuroTag.
+
+3.   Zip this entire folder (e.g., named NeuroTag_Student_v1.zip).
+
+4.    Distribute the Zip file.
+
+*Warning: Do not move the .exe file out of this folder. It requires the libs folder next to it to function.*
 
 ### Troubleshooting
 
