@@ -96,6 +96,7 @@ pyinstaller --noconsole --onedir \
     --name="NeuroTag" \
     annotation.py
 ```
+*use .icns instead of .ico when on mac*
 
 ### Option B: Windows (command prompt)
 On Windows, use a **semicolon (`;`)** to separate source and destination paths.
