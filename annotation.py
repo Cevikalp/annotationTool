@@ -735,6 +735,63 @@ class YoloWorker(qtc.QThread):
 
         self.results_ready.emit(detected_objects)
 
+class ZoomableView(qtw.QGraphicsView):
+    def __init__(self, scene):
+        super().__init__(scene)
+        self.setRenderHint(qtg.QPainter.Antialiasing)
+        self.setRenderHint(qtg.QPainter.SmoothPixmapTransform)
+        self.setTransformationAnchor(qtw.QGraphicsView.AnchorUnderMouse)
+        self.setResizeAnchor(qtw.QGraphicsView.AnchorUnderMouse)
+        
+        # Default: No dragging (Left click is for Drawing/Selecting)
+        self.setDragMode(qtw.QGraphicsView.NoDrag)
+
+    def wheelEvent(self, event):
+        # --- ZOOM (Direct Scroll) ---
+        zoom_in_factor = 1.15
+        zoom_out_factor = 1 / zoom_in_factor
+        
+        if event.angleDelta().y() > 0:
+            self.scale(zoom_in_factor, zoom_in_factor)
+        else:
+            self.scale(zoom_out_factor, zoom_out_factor)
+        
+        # Accept the event so it doesn't try to scroll the scrollbars vertically
+        event.accept()
+
+    def mousePressEvent(self, event):
+        # PAN: Right Mouse Button
+        if event.button() == qtc.Qt.RightButton:
+            # 1. Switch to Hand Drag Mode
+            self.setDragMode(qtw.QGraphicsView.ScrollHandDrag)
+            
+            # 2. Create a fake "Left Click" event
+            # We trick Qt into thinking we are left-clicking to drag
+            fake_event = qtg.QMouseEvent(
+                event.type(), event.position(), event.globalPosition(),
+                qtc.Qt.LeftButton, qtc.Qt.LeftButton, event.modifiers()
+            )
+            super().mousePressEvent(fake_event)
+        else:
+            # DRAW/SELECT: Left Mouse Button
+            super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        # STOP PANNING: Right Mouse Button Release
+        if event.button() == qtc.Qt.RightButton:
+            # 1. Finish the drag with a fake Release event
+            fake_event = qtg.QMouseEvent(
+                event.type(), event.position(), event.globalPosition(),
+                qtc.Qt.LeftButton, qtc.Qt.LeftButton, event.modifiers()
+            )
+            super().mouseReleaseEvent(fake_event)
+            
+            # 2. Turn off Drag Mode (so Left Click goes back to Drawing)
+            self.setDragMode(qtw.QGraphicsView.NoDrag)
+        else:
+            super().mouseReleaseEvent(event)
+
+
 
 # =============================================================================
 # 4. MAIN WINDOW
@@ -752,11 +809,14 @@ class MainWindow(qtw.QMainWindow):
         self.json_folder = ""
         self.current_frame_idx = -1
         self.frame_files = []
-        
+
         self.is_drawing_mode = False
         self.pending_draw_data = None
         self.classes_map = {} # {name: id}
         self.id_to_name_map = {} # {id: name}
+        
+        self.preset_track_id = None
+        self.preset_class_id = None
 
         self.setup_ui()
         self.load_classes_config()
@@ -765,8 +825,44 @@ class MainWindow(qtw.QMainWindow):
         qtg.QShortcut(qtg.QKeySequence("Del"), self, self.delete_selected_box)
         qtg.QShortcut(qtg.QKeySequence("D"), self, self.next_frame)
         qtg.QShortcut(qtg.QKeySequence("A"), self, self.prev_frame)
+        self.setup_number_shortcuts()
 
+    def setup_number_shortcuts(self):
+        # Create shortcuts for keys 0-9
+        for i in range(10):
+            shortcut = qtg.QShortcut(qtg.QKeySequence(str(i)), self)
+            # Connect to a function that handles the selection
+            shortcut.activated.connect(lambda val=i: self.select_track_by_number(val))
 
+    def select_track_by_number(self, track_id):
+        # 1. Robust Lookup: Check for Integer ID first, then String ID
+        # (This fixes cases where IDs are stored as strings in the JSON)
+        found_class_id = self.manager.folder_unique_tracks.get(track_id)
+        if found_class_id is None:
+            found_class_id = self.manager.folder_unique_tracks.get(str(track_id))
+        
+        if found_class_id is None:
+            self.statusBar().showMessage(f"Track {track_id} not found in this folder.", 2000)
+            return
+
+        # 2. Get the Class Name for display
+        cname = self.id_to_name_map.get(found_class_id, "Unknown")
+
+        # 3. Use your existing helper function!
+        # This sets pending_draw_data, changes the cursor, and updates the status bar
+        self.prepare_to_draw(found_class_id, track_id, cname)
+
+        # 4. Optional: Highlight it in the list for visual feedback
+        for i in range(self.list_folder_objects.count()):
+            item = self.list_folder_objects.item(i)
+            # Compare as integers to be safe
+            try:
+                if int(item.data(qtc.Qt.UserRole)) == int(track_id):
+                    self.list_folder_objects.setCurrentItem(item)
+                    break
+            except: pass
+
+    
     def set_view_mode(self):
         """
         Resets the application state to standard View/Select mode.
@@ -1263,8 +1359,8 @@ class MainWindow(qtw.QMainWindow):
         
         # LEFT: Graphics View
         self.scene = AnnotationScene(self)
-        self.view = qtw.QGraphicsView(self.scene)
-        self.view.setRenderHint(qtg.QPainter.Antialiasing)
+        self.view = ZoomableView(self.scene)
+        
         layout.addWidget(self.view, stretch=4)
         
         # RIGHT: Controls
